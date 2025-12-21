@@ -1,0 +1,22 @@
+1. Get the application status by running these commands:
+   kubectl get jobs -n {{ include "kube-auth-manager.namespace" . }}
+   kubectl get pods -n {{ include "kube-auth-manager.namespace" . }}
+
+2. View the auth scanner logs:
+   kubectl logs job/{{ .Values.job.name }} -n {{ include "kube-auth-manager.namespace" . }} -c auth-scanner
+
+3. View the Slack notifier logs:
+   kubectl logs job/{{ .Values.job.name }} -n {{ include "kube-auth-manager.namespace" . }} -c slack-notifier
+
+4. To update the Slack token, create a secret with your token:
+   kubectl create secret generic {{ include "kube-auth-manager.secretName" . }} \
+     --from-literal=slack-bot-token="xoxb-your-slack-token-here" \
+     --namespace={{ include "kube-auth-manager.namespace" . }}
+
+5. To clean up the deployment:
+   helm uninstall {{ .Release.Name }} -n {{ include "kube-auth-manager.namespace" . }}
+
+{{- if .Values.dev.testMode }}
+⚠️  WARNING: Test mode is enabled. The job will send test messages instead of running actual auth scans.
+{{- end }}
+

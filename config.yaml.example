@@ -1,0 +1,30 @@
+# Kubernetes Authorization Audit Configuration
+# Copy this file to config.yaml and fill in your actual values
+# config.yaml is in .gitignore and will NOT be committed
+
+slack:
+  bot_token: "xoxb-your-slack-bot-token-here"
+  channel: "#kube-auth"
+  default_channel: "#general"
+
+kubernetes:
+  namespace: "kube-auth"
+  output_dir: "/tmp/auth-scan-results"
+  max_wait_time: 300
+  max_users: 10  # Maximum number of users/service accounts to scan
+
+docker:
+  username: "your-dockerhub-username"
+  image_name: "kube-auth-manager"
+  image_tag: "latest"
+
+openai:
+  api_key: "sk-your-openai-api-key-here"  # Optional: For AI-powered risk analysis
+  enabled: true
+  model: "gpt-4"  # or "gpt-3.5-turbo" for lower cost
+
+app:
+  debug: false
+  test_mode: false
+  log_level: "INFO"
+

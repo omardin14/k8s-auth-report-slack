@@ -1,0 +1,163 @@
+{{- if not .Values.cronjob.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Values.job.name }}
+  namespace: {{ include "kube-auth-manager.namespace" . }}
+  labels:
+    {{- include "kube-auth-manager.labels" . | nindent 4 }}
+    app: kube-auth
+    component: auth-scan
+  {{- with .Values.job.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.job.ttlSecondsAfterFinished }}
+  ttlSecondsAfterFinished: {{ .Values.job.ttlSecondsAfterFinished }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "kube-auth-manager.selectorLabels" . | nindent 8 }}
+        app: kube-auth
+        component: auth-scan
+      {{- with .Values.job.labels }}
+      labels:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "kube-auth-manager.serviceAccountName" . }}
+      restartPolicy: {{ .Values.job.restartPolicy }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      # Auth scanner container
+      - name: auth-scanner
+        image: "{{ .Values.global.imageRegistry }}{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy | default "Never" }}
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            python -c "
+            import json
+            import sys
+            import os
+            sys.path.insert(0, '/app')
+            from auth_analyzer import AuthScanner
+            
+            scanner = AuthScanner(max_users={{ .Values.authscanner.maxUsers }})
+            results = scanner.scan_cluster_auth()
+            
+            output_dir = '{{ .Values.slack.outputDir }}'
+            os.makedirs(output_dir, exist_ok=True)
+            
+            output_file = os.path.join(output_dir, 'results.json')
+            with open(output_file, 'w') as f:
+                json.dump(results, f, indent=2)
+            
+            print(f'Auth scan complete. Results written to {output_file}')
+            "
+        volumeMounts:
+        - name: {{ .Values.volumes.shared.name }}
+          mountPath: {{ .Values.slack.outputDir }}
+        env:
+        - name: PYTHONPATH
+          value: "/app"
+        - name: AUTH_SCAN_OUTPUT_DIR
+          value: {{ .Values.slack.outputDir | quote }}
+        {{- if .Values.authscanner.securityContext }}
+        securityContext:
+          {{- toYaml .Values.authscanner.securityContext | nindent 10 }}
+        {{- end }}
+        {{- if .Values.authscanner.resources }}
+        resources:
+          {{- toYaml .Values.authscanner.resources | nindent 10 }}
+        {{- end }}
+      
+      # Slack notification sidecar container
+      - name: slack-notifier
+        image: "{{ .Values.global.imageRegistry }}{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy | default "Never" }}
+        env:
+        - name: SLACK_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "kube-auth-manager.secretName" . }}
+              key: slack-bot-token
+        - name: SLACK_CHANNEL
+          value: {{ .Values.slack.channel | quote }}
+        - name: AUTH_SCAN_OUTPUT_DIR
+          value: {{ .Values.slack.outputDir | quote }}
+        - name: MAX_WAIT_TIME
+          value: {{ .Values.slack.maxWaitTime | quote }}
+        {{- if and .Values.openai.enabled .Values.openai.apiKey }}
+        {{- if kindIs "string" .Values.openai.apiKey }}
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "kube-auth-manager.secretName" . }}
+              key: openai-api-key
+        {{- else }}
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openai-credentials
+              key: openai-api-key
+              optional: true
+        {{- end }}
+        {{- else if .Values.openai.enabled }}
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openai-credentials
+              key: openai-api-key
+              optional: true
+        {{- end }}
+        {{- if .Values.dev.debug }}
+        - name: DEBUG
+          value: "true"
+        {{- end }}
+        {{- if .Values.dev.testMode }}
+        - name: TEST_MODE
+          value: "true"
+        {{- end }}
+        volumeMounts:
+        - name: {{ .Values.volumes.shared.name }}
+          mountPath: {{ .Values.slack.outputDir }}
+        {{- if .Values.slack.resources }}
+        resources:
+          {{- toYaml .Values.slack.resources | nindent 10 }}
+        {{- end }}
+        {{- if .Values.monitoring.healthCheck.enabled }}
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import requests; requests.get('https://slack.com/api/auth.test', timeout=5)"
+          initialDelaySeconds: {{ .Values.monitoring.healthCheck.initialDelaySeconds }}
+          periodSeconds: {{ .Values.monitoring.healthCheck.periodSeconds }}
+          timeoutSeconds: {{ .Values.monitoring.healthCheck.timeoutSeconds }}
+          failureThreshold: {{ .Values.monitoring.healthCheck.failureThreshold }}
+        {{- end }}
+      
+      volumes:
+      - name: {{ .Values.volumes.shared.name }}
+        {{- if eq .Values.volumes.shared.type "emptyDir" }}
+        emptyDir: {}
+        {{- else }}
+        {{- toYaml .Values.volumes.shared | nindent 8 }}
+        {{- end }}
+{{- end }}
+

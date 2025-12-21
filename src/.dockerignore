@@ -1,0 +1,52 @@
+# Exclude configuration files with secrets (CRITICAL!)
+config.yaml
+*.yaml
+!requirements.txt
+
+# Note: config.yaml contains secrets and should NEVER be in the Docker image
+
+# Exclude Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Exclude virtual environments
+venv/
+env/
+ENV/
+
+# Exclude IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Exclude OS files
+.DS_Store
+Thumbs.db
+
+# Exclude test files
+test_*.py
+*_test.py
+test-*.html
+test-*.json
+
+# Exclude logs
+*.log
+logs/
+
+# Exclude temporary files
+tmp/
+temp/
+*.tmp
+
+# Exclude git
+.git/
+.gitignore
+
+# Exclude documentation (except what's needed)
+*.md
+!README.md
+

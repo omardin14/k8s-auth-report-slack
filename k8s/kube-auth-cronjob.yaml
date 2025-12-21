@@ -1,0 +1,116 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kube-auth-health-check
+  namespace: kube-auth
+spec:
+  # Default: Run daily at midnight GMT (0 0 * * *)
+  schedule: "0 0 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: kube-auth
+            component: auth-scan
+        spec:
+          serviceAccountName: kube-auth-sa
+          restartPolicy: Never
+          containers:
+          # Auth scanner container
+          - name: auth-scanner
+            image: kube-auth-manager:latest
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                python -c "
+                import json
+                import sys
+                sys.path.insert(0, '/app')
+                from auth_analyzer import AuthScanner
+                
+                scanner = AuthScanner(max_users=10)
+                results = scanner.scan_cluster_auth()
+                
+                import os
+                output_dir = os.getenv('AUTH_SCAN_OUTPUT_DIR', '/tmp/auth-scan-results')
+                os.makedirs(output_dir, exist_ok=True)
+                
+                output_file = os.path.join(output_dir, 'results.json')
+                with open(output_file, 'w') as f:
+                    json.dump(results, f, indent=2)
+                
+                print(f'Auth scan complete. Results written to {output_file}')
+                "
+            volumeMounts:
+            - name: auth-scan-results
+              mountPath: /tmp/auth-scan-results
+            env:
+            - name: PYTHONPATH
+              value: "/app"
+            - name: AUTH_SCAN_OUTPUT_DIR
+              value: "/tmp/auth-scan-results"
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 1000
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: false
+              capabilities:
+                drop:
+                - ALL
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
+          
+          # Slack notification sidecar container
+          - name: slack-notifier
+            image: kube-auth-manager:latest
+            env:
+            - name: SLACK_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: slack-credentials
+                  key: slack-bot-token
+            - name: SLACK_CHANNEL
+              value: "#kube-auth"
+            - name: AUTH_SCAN_OUTPUT_DIR
+              value: "/tmp/auth-scan-results"
+            - name: MAX_WAIT_TIME
+              value: "300"
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: slack-credentials
+                  key: openai-api-key
+                  optional: true
+            - name: PYTHONPATH
+              value: "/app"
+            volumeMounts:
+            - name: auth-scan-results
+              mountPath: /tmp/auth-scan-results
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 1000
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: false
+              capabilities:
+                drop:
+                - ALL
+            resources:
+              requests:
+                memory: "64Mi"
+                cpu: "50m"
+              limits:
+                memory: "128Mi"
+                cpu: "100m"
+          
+          volumes:
+          - name: auth-scan-results
+            emptyDir: {}
+

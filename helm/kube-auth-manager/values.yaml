@@ -1,0 +1,121 @@
+# Default values for kube-auth-manager
+# This is a YAML-formatted file.
+
+# Global configuration
+global:
+  imageRegistry: ""
+  imagePullPolicy: IfNotPresent
+
+# Namespace configuration
+namespace:
+  name: kube-auth
+
+# Auth scanner configuration
+authscanner:
+  # Maximum number of users/service accounts to scan
+  maxUsers: 10
+  
+  # Resource limits and requests
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  
+  # Security context
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop:
+      - ALL
+
+# Image configuration
+image:
+  repository: kube-auth-manager
+  tag: latest
+  pullPolicy: Never  # Use Never for local minikube, Always for Docker Hub
+
+slack:
+  channel: "#kube-auth"
+  outputDir: "/tmp/auth-scan-results"
+  maxWaitTime: 300
+  
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "128Mi"
+      cpu: "100m"
+  
+  token: ""  # Set via --set slack.token="xoxb-..." or leave empty to use existing secret
+
+# OpenAI configuration (optional)
+openai:
+  apiKey: ""  # Set via --set openai.apiKey="sk-..." or leave empty to disable
+  enabled: true
+
+# Job configuration
+job:
+  name: kube-auth-health-check
+  labels: {}
+  annotations: {}
+  restartPolicy: Never
+  ttlSecondsAfterFinished: 3600
+
+# CronJob configuration
+cronjob:
+  enabled: false
+  schedule: "0 0 * * *"  # Daily at midnight GMT
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  suspend: false
+  labels: {}
+  annotations: {}
+
+# RBAC configuration
+rbac:
+  create: true
+  serviceAccount:
+    name: kube-auth-sa
+    annotations: {}
+  clusterRole:
+    name: kube-auth-role
+  clusterRoleBinding:
+    name: kube-auth-binding
+
+# Node selection
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity rules
+affinity: {}
+
+# Volume configuration
+volumes:
+  shared:
+    name: auth-scan-results
+    type: emptyDir
+
+# Monitoring
+monitoring:
+  healthCheck:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+  logLevel: INFO
+
+# Development
+dev:
+  debug: false
+  testMode: false
+
