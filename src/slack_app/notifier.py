@@ -240,3 +240,4 @@ class SlackNotifier:
         self.client.send_message("⚠️ Auth scan timed out - no results found", channel)
         return False
 
+

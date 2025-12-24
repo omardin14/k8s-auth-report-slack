@@ -296,6 +296,79 @@ class HTMLReportGenerator:
         .btn-expand:hover {{
             background: #5568d3;
         }}
+        
+        .ai-analysis-container {{
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 30px;
+            margin-top: 20px;
+        }}
+        
+        .ai-section {{
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #e2e8f0;
+        }}
+        
+        .ai-section:last-child {{
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }}
+        
+        .ai-heading {{
+            color: #1e40af;
+            font-size: 1.3em;
+            font-weight: 700;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #3b82f6;
+        }}
+        
+        .ai-content {{
+            color: #374151;
+            line-height: 1.8;
+            font-size: 0.95em;
+        }}
+        
+        .ai-content p {{
+            margin-bottom: 12px;
+        }}
+        
+        .ai-content p:last-child {{
+            margin-bottom: 0;
+        }}
+        
+        .ai-content strong {{
+            color: #1e40af;
+            font-weight: 600;
+        }}
+        
+        .ai-list {{
+            list-style: none;
+            padding-left: 0;
+            margin: 15px 0;
+        }}
+        
+        .ai-list li {{
+            padding: 10px 15px;
+            margin-bottom: 8px;
+            background: white;
+            border-left: 4px solid #3b82f6;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }}
+        
+        .ai-list li:last-child {{
+            margin-bottom: 0;
+        }}
+        
+        .ai-list li strong {{
+            color: #1e40af;
+            display: inline-block;
+            margin-right: 5px;
+        }}
     </style>
 </head>
 <body>
@@ -393,6 +466,27 @@ class HTMLReportGenerator:
             
             status_class = f"status-{risk_level}"
             
+            # Build conditional HTML parts separately to avoid nested f-string issues
+            risk_factors_html = ""
+            if risk_factors:
+                risk_factors_list = " ".join([f'<span class="risk-factor">{rf}</span>' for rf in risk_factors])
+                risk_factors_html = f'<div class="detail"><strong>Risk Factors:</strong><div class="value">{risk_factors_list}</div></div>'
+            
+            roles_html = ""
+            if roles:
+                roles_list = ", ".join([r.get("name", "unknown") for r in roles])
+                roles_html = f'<div class="detail"><strong>Roles:</strong><div class="value">{roles_list}</div></div>'
+            
+            cluster_roles_html = ""
+            if cluster_roles:
+                cluster_roles_list = ", ".join([cr.get("name", "unknown") for cr in cluster_roles])
+                cluster_roles_html = f'<div class="detail"><strong>Cluster Roles:</strong><div class="value">{cluster_roles_list}</div></div>'
+            
+            ai_insights_html = ""
+            if ai_insights:
+                formatted_insights = HTMLReportGenerator._format_ai_insights(ai_insights)
+                ai_insights_html = f'<div class="ai-insights"><strong>💡 AI-Powered Insights:</strong><div class="value">{formatted_insights}</div></div>'
+            
             html_parts.append(f"""
             <div class="entity">
                 <div class="entity-header" onclick="toggleEntity(this)">
@@ -415,10 +509,10 @@ class HTMLReportGenerator:
                         <strong>Risk Level:</strong>
                         <div class="value">{risk_level.upper()}</div>
                     </div>
-                    {f'<div class="detail"><strong>Risk Factors:</strong><div class="value">{" ".join([f\'<span class="risk-factor">{rf}</span>\' for rf in risk_factors])}</div></div>' if risk_factors else ''}
-                    {f'<div class="detail"><strong>Roles:</strong><div class="value">{", ".join([r.get("name", "unknown") for r in roles])}</div></div>' if roles else ''}
-                    {f'<div class="detail"><strong>Cluster Roles:</strong><div class="value">{", ".join([cr.get("name", "unknown") for cr in cluster_roles])}</div></div>' if cluster_roles else ''}
-                    {f'<div class="ai-insights"><strong>💡 AI-Powered Insights:</strong><div class="value">{HTMLReportGenerator._format_ai_insights(ai_insights)}</div></div>' if ai_insights else ''}
+                    {risk_factors_html}
+                    {roles_html}
+                    {cluster_roles_html}
+                    {ai_insights_html}
                 </div>
             </div>
             """)
@@ -462,15 +556,126 @@ class HTMLReportGenerator:
         ai_analysis = analysis['ai_analysis']
         risk_assessment = ai_analysis.get('risk_assessment', '')
         
-        # Format the AI analysis with line breaks
-        formatted_assessment = risk_assessment.replace('\n', '<br>')
+        # Format the AI analysis with proper HTML structure
+        formatted_assessment = HTMLReportGenerator._format_ai_analysis_text(risk_assessment)
         
         return f"""
         <div class="section">
             <h2>🤖 AI-Powered Risk Analysis</h2>
-            <div class="ai-insights">
-                <div class="value">{formatted_assessment}</div>
+            <div class="ai-analysis-container">
+                {formatted_assessment}
             </div>
         </div>
         """
+    
+    @staticmethod
+    def _format_ai_analysis_text(text: str) -> str:
+        """Format AI analysis text with proper HTML structure."""
+        if not text:
+            return ""
+        
+        # Split text by section headings (format: **1. Title**)
+        # Use a regex that captures the heading and content separately
+        pattern = r'(\*\*\d+\.\s+[^*]+\*\*)'
+        parts = re.split(pattern, text)
+        
+        html_parts = []
+        current_section = False
+        
+        for i, part in enumerate(parts):
+            part = part.strip()
+            if not part:
+                continue
+            
+            # Check if this is a heading (starts with ** and has a number)
+            if re.match(r'\*\*\d+\.', part):
+                # Close previous section if exists
+                if current_section:
+                    html_parts.append('</div></div>')
+                
+                # Extract heading text (remove ** markers)
+                heading_text = re.sub(r'\*\*', '', part)
+                
+                # Start new section
+                html_parts.append(f'<div class="ai-section"><h3 class="ai-heading">{heading_text}</h3><div class="ai-content">')
+                current_section = True
+            else:
+                # This is content - convert markdown to HTML
+                formatted = HTMLReportGenerator._convert_markdown_to_html(part)
+                html_parts.append(formatted)
+        
+        # Close last section
+        if current_section:
+            html_parts.append('</div></div>')
+        
+        result = ''.join(html_parts)
+        # If no sections were found, format the whole text
+        if not current_section:
+            result = f'<div class="ai-content">{HTMLReportGenerator._convert_markdown_to_html(text)}</div>'
+        
+        return result
+    
+    @staticmethod
+    def _convert_markdown_to_html(text: str) -> str:
+        """Convert markdown-style formatting to HTML."""
+        if not text:
+            return ""
+        
+        # First, convert **bold** to <strong> (but avoid converting if it's part of a heading pattern)
+        # We'll do this more carefully to avoid double conversion
+        text = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', text)
+        
+        # Split into lines for processing
+        lines = text.split('\n')
+        formatted_lines = []
+        in_list = False
+        current_paragraph = []
+        
+        for line in lines:
+            line = line.strip()
+            
+            # Empty line - end current paragraph or list
+            if not line:
+                if in_list:
+                    formatted_lines.append('</ul>')
+                    in_list = False
+                elif current_paragraph:
+                    formatted_lines.append(f'<p>{" ".join(current_paragraph)}</p>')
+                    current_paragraph = []
+                continue
+            
+            # Check if it's a numbered list item (format: 1. item or **1. item**)
+            # But not if it's already been converted to a heading
+            list_match = re.match(r'(?:<strong>)?(\d+)\.\s+(.+?)(?:</strong>)?$', line)
+            if list_match and not line.startswith('<h3'):
+                if not in_list:
+                    formatted_lines.append('<ul class="ai-list">')
+                    in_list = True
+                
+                item_text = list_match.group(2).strip()
+                # Clean up any remaining markdown
+                item_text = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', item_text)
+                formatted_lines.append(f'<li>{item_text}</li>')
+            else:
+                # Regular text - add to current paragraph
+                if in_list:
+                    formatted_lines.append('</ul>')
+                    in_list = False
+                
+                # Clean up the line
+                cleaned_line = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', line)
+                current_paragraph.append(cleaned_line)
+        
+        # Close any open structures
+        if in_list:
+            formatted_lines.append('</ul>')
+        if current_paragraph:
+            formatted_lines.append(f'<p>{" ".join(current_paragraph)}</p>')
+        
+        result = '\n'.join(formatted_lines)
+        # If nothing was formatted, return as paragraph
+        if not result:
+            result = f'<p>{text}</p>'
+        
+        return result
 

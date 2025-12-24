@@ -10,3 +10,4 @@ from .analyzer import AuthAnalyzer
 
 __all__ = ['AuthScanner', 'AuthAnalyzer']
 
+

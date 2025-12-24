@@ -153,3 +153,4 @@ class Config:
             'image_tag': self.docker_image_tag
         }
 
+

@@ -10,3 +10,4 @@ from .notifier import SlackNotifier
 
 __all__ = ['SlackClient', 'SlackFormatter', 'SlackNotifier']
 
+

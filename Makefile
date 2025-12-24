@@ -10,7 +10,7 @@ IMAGE_NAME = kube-auth-manager
 IMAGE_TAG ?= latest
 FULL_IMAGE_NAME = $(DOCKER_USERNAME)/$(IMAGE_NAME):$(IMAGE_TAG)
 
-.PHONY: help build deploy deploy-cron clean test logs status helm-deploy helm-deploy-cron helm-clean helm-status setup-minikube check-minikube start-minikube stop-minikube reset-minikube docker-build docker-push docker-login config install activate secret openai-secret
+.PHONY: help build deploy deploy-cron clean test users-create users-clean logs status helm-deploy helm-deploy-cron helm-clean helm-status setup-minikube check-minikube start-minikube stop-minikube reset-minikube docker-build docker-push docker-login config install activate secret openai-secret
 
 # Default target
 help:
@@ -34,6 +34,8 @@ help:
 	@echo "  config         - Create config.yaml from example"
 	@echo "  install        - Install Python dependencies in virtual environment"
 	@echo "  test           - Test Slack connection locally [uses config.yaml]"
+	@echo "  users-create   - Create test users and service accounts (no Slack, no cleanup)"
+	@echo "  users-clean    - Clean up test users and service accounts"
 	@echo "  logs           - View application logs"
 	@echo "  status         - Check deployment status"
 	@echo "  helm-status    - Check Helm release status"
@@ -269,6 +271,32 @@ test:
 			echo "📝 Using config.yaml for configuration"; \
 		fi; \
 		. venv/bin/activate && cd src && python main.py; \
+	else \
+		echo "❌ Virtual environment not found. Run 'make install' first."; \
+		exit 1; \
+	fi
+
+# Create test users and service accounts only (no Slack, no cleanup)
+users-create:
+	@echo "👥 Creating test users and service accounts..."
+	@if [ -d "venv" ]; then \
+		if [ -f "config.yaml" ]; then \
+			echo "📝 Using config.yaml for configuration"; \
+		fi; \
+		CREATE_TEST_USERS_ONLY=true . venv/bin/activate && cd src && python main.py; \
+	else \
+		echo "❌ Virtual environment not found. Run 'make install' first."; \
+		exit 1; \
+	fi
+
+# Clean up test users and service accounts
+users-clean:
+	@echo "🧹 Cleaning up test users and service accounts..."
+	@if [ -d "venv" ]; then \
+		if [ -f "config.yaml" ]; then \
+			echo "📝 Using config.yaml for configuration"; \
+		fi; \
+		CLEANUP_TEST_RESOURCES=true . venv/bin/activate && cd src && python main.py; \
 	else \
 		echo "❌ Virtual environment not found. Run 'make install' first."; \
 		exit 1; \

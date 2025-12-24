@@ -19,11 +19,14 @@ metadata:
     {{- include "kube-auth-manager.labels" . | nindent 4 }}
 rules:
 - apiGroups: [""]
-  resources: ["serviceaccounts", "pods", "secrets", "namespaces"]
+  resources: ["serviceaccounts", "pods", "secrets", "namespaces", "events"]
+  verbs: ["get", "list", "create", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
   verbs: ["get", "list"]
 - apiGroups: ["rbac.authorization.k8s.io"]
   resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
-  verbs: ["get", "list"]
+  verbs: ["get", "list", "create", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

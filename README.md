@@ -17,6 +17,7 @@ A complete Kubernetes solution that scans cluster users and service accounts, au
 - [What You'll Get](#-what-youll-get-in-slack)
 - [Configuration](#-configuration)
 - [Security](#-security)
+- [Testing with Test Users](#-testing-with-test-users)
 - [Troubleshooting](#-troubleshooting)
 - [Cleanup](#-cleanup)
 
@@ -92,12 +93,25 @@ make logs
 
 ## ✨ Features
 
-### 🔐 Authorization Auditing
+### 🔐 Authorization Auditing & Activity Detection
 - Scans the last 10 active users and service accounts
 - Analyzes RBAC permissions (Roles, ClusterRoles, RoleBindings, ClusterRoleBindings)
 - Identifies high-risk users with excessive permissions
 - Detects cluster-admin and wildcard permissions
 - Risk level assessment (HIGH/MEDIUM/LOW)
+- **Activity Detection**: Tracks recent activities for users and service accounts
+  - **Primary Method**: Attempts to use Kubernetes audit logs (if enabled and accessible)
+  - **Fallback Method**: Uses Events API and recent resource changes when audit logs unavailable
+  - **For Service Accounts**: 
+    - Direct attribution via pods using the service account
+    - Events in the service account's namespace
+    - Recent deployments in the namespace
+  - **For Regular Users**:
+    - Events in namespaces where the user has RBAC bindings
+    - Recent resource changes (pods, deployments) in those namespaces
+    - Checks resource annotations for creator information when available
+  - **Time Window**: Shows activities from the last 24 hours
+  - **Activity Details**: Includes timestamps, resource types, actions, and status
 
 ### 🤖 AI-Powered Analysis (Optional)
 - **OpenAI integration** for intelligent risk assessment
@@ -125,7 +139,10 @@ make logs
 
 The application consists of two containers running in a Kubernetes Job:
 
-1. **Auth Scanner Container**: Scans the cluster for users/service accounts and their permissions
+1. **Auth Scanner Container**: 
+   - Scans the cluster for users/service accounts and their permissions
+   - Detects recent activities (audit logs → Events → resource changes)
+   - Analyzes RBAC bindings and calculates risk levels
 2. **Slack Notifier Container**: Monitors for scan results and sends formatted reports to Slack
 
 ```
@@ -221,6 +238,11 @@ make test
 
 ✅ **You should see test messages in your Slack channel!**
 
+**Note:** `make test` will:
+- Create test users and service accounts
+- Scan the cluster and send reports to Slack
+- Automatically clean up test resources when done
+
 ---
 
 ## 📊 What You'll Get in Slack
@@ -240,6 +262,10 @@ A rich message with:
 A beautiful, downloadable HTML file with:
 - **Executive Summary**: Visual dashboard with color-coded stats
 - **User Details**: Every user/SA with full permission breakdown
+- **Recent Activities**: Shows recent actions (pods created, events, deployments)
+  - For service accounts: Direct attribution via `serviceAccountName`
+  - For users: Activity in namespaces where they have permissions
+  - Timestamps and resource details for each activity
 - **Expandable Sections**: Click to expand/collapse user details
 - **Risk Factors**: Highlighted security concerns
 - **AI-Powered Insights**: Explains risks and remediation (when enabled)
@@ -345,14 +371,17 @@ securityContext:
 
 #### 2. Minimal RBAC Permissions
 
-The scanner only requires read permissions:
-- `serviceaccounts`, `pods`, `secrets`, `namespaces`: `get`, `list`
+The scanner requires read permissions for auditing:
+- `serviceaccounts`, `pods`, `secrets`, `namespaces`, `events`: `get`, `list`
+- `deployments`, `replicasets` (from `apps` API group): `get`, `list`
 - `roles`, `rolebindings`, `clusterroles`, `clusterrolebindings`: `get`, `list`
+- `create`, `delete` permissions (only for test mode - creating test users/SAs)
 
 **Benefits:**
-- No write permissions
+- No write permissions in production mode
 - Cannot modify cluster state
-- Read-only access to authorization data
+- Read-only access to authorization data and activity logs
+- Test mode allows creating temporary test resources for validation
 
 #### 3. Secrets Management
 
@@ -431,6 +460,23 @@ kubectl auth can-i list serviceaccounts --as=system:serviceaccount:kube-auth:kub
 kubectl logs job/kube-auth-health-check -n kube-auth -c auth-scanner
 ```
 
+**6. No activity detected for users/service accounts**
+```bash
+# Activity detection uses:
+# 1. Audit logs (if enabled) - requires cluster-admin and audit logging enabled
+# 2. Events API - shows events in namespaces
+# 3. Resource changes - shows recent pods/deployments
+
+# Check if audit logs are enabled
+kubectl get apiserverconfigs.auditregistration.k8s.io
+
+# Verify events are accessible
+kubectl get events --all-namespaces
+
+# For service accounts, activity is detected via pods using that SA
+# For users, activity is shown in namespaces where they have bindings
+```
+
 ### Debug Commands
 
 ```bash
@@ -450,9 +496,54 @@ make test
 
 ---
 
+## 🧪 Testing with Test Users
+
+### Create Test Users for Deployment Testing
+
+If you want to test your deployment with test users and service accounts:
+
+```bash
+# Create test users and service accounts (no Slack reports, no cleanup)
+make users-create
+```
+
+This will create:
+- Test namespace: `auth-test`
+- Test users: `test-admin-user`, `test-reader-user`
+- Test service accounts: `test-admin-sa`, `test-reader-sa`, `test-writer-sa`
+- Test roles and bindings with different permission levels
+
+**Then deploy and test:**
+```bash
+make build
+make helm-deploy
+```
+
+The deployed job will detect and scan these test users.
+
+### Clean Up Test Users
+
+```bash
+# Clean up test users and service accounts
+make users-clean
+```
+
+This removes all test resources including the `auth-test` namespace.
+
+### Full Test (with Slack Reports)
+
+```bash
+# Full test: creates users, sends Slack reports, then cleans up
+make test
+```
+
+This is useful for testing the complete workflow including Slack integration.
+
+---
+
 ## 🧹 Cleanup
 
-### Remove Resources
+### Remove Deployment Resources
 
 ```bash
 # Kubernetes deployment
@@ -465,12 +556,22 @@ make helm-clean
 make clean && make helm-clean
 ```
 
+### Remove Test Users
+
+```bash
+# Clean up test users and service accounts
+make users-clean
+```
+
 ### Complete Cleanup
 
 ```bash
 # Remove all resources
 make clean
 make helm-clean
+
+# Remove test users
+make users-clean
 
 # Remove Docker images
 docker rmi kube-auth-manager:latest
@@ -525,7 +626,9 @@ See `make help` for all available commands, or check the Makefile.
 **Key commands:**
 - `make config` - Create config.yaml from example
 - `make install` - Install Python dependencies
-- `make test` - Test Slack connection locally
+- `make test` - Test Slack connection locally (creates test users, sends reports, cleans up)
+- `make users-create` - Create test users and service accounts (no Slack, no cleanup)
+- `make users-clean` - Clean up test users and service accounts
 - `make build` - Build Docker image
 - `make docker-build` - Build and push to Docker Hub
 - `make helm-deploy` - Deploy using Helm

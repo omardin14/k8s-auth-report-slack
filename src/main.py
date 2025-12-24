@@ -15,9 +15,17 @@ def main():
         # Create configuration
         config = Config()
         
-        # Create and run application
+        # Create application
         app = KubeAuthManagerApp(config)
-        exit_code = app.run()
+        
+        # Check for special modes
+        if os.getenv('CLEANUP_TEST_RESOURCES', '').lower() == 'true':
+            exit_code = app.cleanup_test_resources()
+        elif os.getenv('CREATE_TEST_USERS_ONLY', '').lower() == 'true':
+            exit_code = app.create_test_users_only()
+        else:
+            exit_code = app.run()
+        
         sys.exit(exit_code)
             
     except Exception as e:
@@ -26,4 +34,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

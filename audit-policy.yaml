@@ -1,0 +1,27 @@
+apiVersion: audit.k8s.io/v1
+kind: Policy
+rules:
+  # Log all requests at the Metadata level
+  - level: Metadata
+    # Don't log read-only requests to reduce noise
+    omitStages:
+      - RequestReceived
+    # Log all resources
+    resources:
+      - group: ""
+      - group: "apps"
+      - group: "rbac.authorization.k8s.io"
+      - group: "*"
+  # Log requests that modify resources at RequestResponse level
+  - level: RequestResponse
+    verbs:
+      - create
+      - update
+      - patch
+      - delete
+    resources:
+      - group: ""
+      - group: "apps"
+      - group: "rbac.authorization.k8s.io"
+      - group: "*"
+
