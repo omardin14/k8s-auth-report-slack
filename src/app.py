@@ -274,7 +274,7 @@ class KubeAuthManagerApp:
                     'test-binding-test-admin-sa',
                     'test-binding-test-reader-sa',
                     'test-binding-test-writer-sa'
-                ]
+                ],
             }
             
             # Clean up using the scanner's cleanup method

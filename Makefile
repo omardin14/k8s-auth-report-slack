@@ -96,6 +96,7 @@ start-minikube:
 	fi
 	@if minikube status 2>&1 | grep -q "host: Running"; then \
 		echo "✅ Minikube is already running"; \
+		echo "ℹ️  To restart, run 'make reset-minikube' first"; \
 	else \
 		minikube delete 2>/dev/null || true; \
 		minikube start --driver=docker --cpus=2 --memory=3072; \

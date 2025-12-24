@@ -1,8 +1,7 @@
 """
 Auth Analyzer Module
 
-Scans Kubernetes cluster for active users and service accounts, checks their permissions,
-and analyzes their activities.
+Scans Kubernetes cluster for active users and service accounts and checks their permissions.
 """
 
 from .scanner import AuthScanner

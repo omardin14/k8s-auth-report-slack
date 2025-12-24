@@ -93,25 +93,12 @@ make logs
 
 ## ✨ Features
 
-### 🔐 Authorization Auditing & Activity Detection
+### 🔐 Authorization Auditing
 - Scans the last 10 active users and service accounts
 - Analyzes RBAC permissions (Roles, ClusterRoles, RoleBindings, ClusterRoleBindings)
 - Identifies high-risk users with excessive permissions
 - Detects cluster-admin and wildcard permissions
 - Risk level assessment (HIGH/MEDIUM/LOW)
-- **Activity Detection**: Tracks recent activities for users and service accounts
-  - **Primary Method**: Attempts to use Kubernetes audit logs (if enabled and accessible)
-  - **Fallback Method**: Uses Events API and recent resource changes when audit logs unavailable
-  - **For Service Accounts**: 
-    - Direct attribution via pods using the service account
-    - Events in the service account's namespace
-    - Recent deployments in the namespace
-  - **For Regular Users**:
-    - Events in namespaces where the user has RBAC bindings
-    - Recent resource changes (pods, deployments) in those namespaces
-    - Checks resource annotations for creator information when available
-  - **Time Window**: Shows activities from the last 24 hours
-  - **Activity Details**: Includes timestamps, resource types, actions, and status
 
 ### 🤖 AI-Powered Analysis (Optional)
 - **OpenAI integration** for intelligent risk assessment
@@ -141,7 +128,6 @@ The application consists of two containers running in a Kubernetes Job:
 
 1. **Auth Scanner Container**: 
    - Scans the cluster for users/service accounts and their permissions
-   - Detects recent activities (audit logs → Events → resource changes)
    - Analyzes RBAC bindings and calculates risk levels
 2. **Slack Notifier Container**: Monitors for scan results and sends formatted reports to Slack
 
@@ -262,10 +248,6 @@ A rich message with:
 A beautiful, downloadable HTML file with:
 - **Executive Summary**: Visual dashboard with color-coded stats
 - **User Details**: Every user/SA with full permission breakdown
-- **Recent Activities**: Shows recent actions (pods created, events, deployments)
-  - For service accounts: Direct attribution via `serviceAccountName`
-  - For users: Activity in namespaces where they have permissions
-  - Timestamps and resource details for each activity
 - **Expandable Sections**: Click to expand/collapse user details
 - **Risk Factors**: Highlighted security concerns
 - **AI-Powered Insights**: Explains risks and remediation (when enabled)
@@ -372,15 +354,14 @@ securityContext:
 #### 2. Minimal RBAC Permissions
 
 The scanner requires read permissions for auditing:
-- `serviceaccounts`, `pods`, `secrets`, `namespaces`, `events`: `get`, `list`
-- `deployments`, `replicasets` (from `apps` API group): `get`, `list`
+- `serviceaccounts`, `pods`, `secrets`, `namespaces`: `get`, `list`
 - `roles`, `rolebindings`, `clusterroles`, `clusterrolebindings`: `get`, `list`
 - `create`, `delete` permissions (only for test mode - creating test users/SAs)
 
 **Benefits:**
 - No write permissions in production mode
 - Cannot modify cluster state
-- Read-only access to authorization data and activity logs
+- Read-only access to authorization data
 - Test mode allows creating temporary test resources for validation
 
 #### 3. Secrets Management
@@ -460,22 +441,6 @@ kubectl auth can-i list serviceaccounts --as=system:serviceaccount:kube-auth:kub
 kubectl logs job/kube-auth-health-check -n kube-auth -c auth-scanner
 ```
 
-**6. No activity detected for users/service accounts**
-```bash
-# Activity detection uses:
-# 1. Audit logs (if enabled) - requires cluster-admin and audit logging enabled
-# 2. Events API - shows events in namespaces
-# 3. Resource changes - shows recent pods/deployments
-
-# Check if audit logs are enabled
-kubectl get apiserverconfigs.auditregistration.k8s.io
-
-# Verify events are accessible
-kubectl get events --all-namespaces
-
-# For service accounts, activity is detected via pods using that SA
-# For users, activity is shown in namespaces where they have bindings
-```
 
 ### Debug Commands
 
